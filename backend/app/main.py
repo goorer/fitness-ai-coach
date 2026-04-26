@@ -1,11 +1,14 @@
 from fastapi import FastAPI
-from .database import engine, Base
+
 from . import models
+from .database import Base, engine
+from .routers import exercises
 
 app = FastAPI()
 
-# 起動時にテーブル作成
 Base.metadata.create_all(bind=engine)
+
+app.include_router(exercises.router)
 
 
 @app.get("/")
