@@ -1,4 +1,4 @@
-# fitness-ai-coach
+# Fitness AI Coach
 
 トレーニング記録とAIによる分析・提案を行うフィットネスアプリ
 
