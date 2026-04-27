@@ -38,6 +38,13 @@ class WorkoutSetCreate(BaseModel):
     set_order: int
 
 
+class WorkoutSetUpdate(BaseModel):
+    exercise_id: int
+    weight: float
+    reps: int
+    set_order: int
+
+
 class WorkoutSetResponse(BaseModel):
     id: int
     workout_id: int
@@ -48,6 +55,26 @@ class WorkoutSetResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ExerciseSetHistoryResponse(BaseModel):
+    id: int
+    workout_id: int
+    exercise_id: int
+    trained_at: datetime
+    weight: float
+    reps: int
+    set_order: int
+    volume: float
+
+
+class ExerciseSummaryResponse(BaseModel):
+    exercise_id: int
+    total_sets: int
+    max_weight: float | None = None
+    max_reps: int | None = None
+    total_volume: float
+    suggested_next_weight: float | None = None
 
 
 class WorkoutDetailResponse(BaseModel):

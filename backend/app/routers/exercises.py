@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -27,16 +27,17 @@ def create_exercise(
 def get_exercises(db: Session = Depends(get_db)):
     return db.query(models.Exercise).all()
 
+
 @router.put("/{exercise_id}", response_model=schemas.ExerciseResponse)
 def update_exercise(
     exercise_id: int,
     exercise: schemas.ExerciseCreate,
     db: Session = Depends(get_db),
 ):
-    db_exercise = db.query(models.Exercise).get(exercise_id)
+    db_exercise = db.get(models.Exercise, exercise_id)
 
     if not db_exercise:
-        return None
+        raise HTTPException(status_code=404, detail="Exercise not found")
 
     db_exercise.name = exercise.name
     db_exercise.body_part = exercise.body_part
@@ -46,15 +47,28 @@ def update_exercise(
 
     return db_exercise
 
+
 @router.delete("/{exercise_id}")
 def delete_exercise(
     exercise_id: int,
     db: Session = Depends(get_db),
 ):
-    db_exercise = db.query(models.Exercise).get(exercise_id)
+    db_exercise = db.get(models.Exercise, exercise_id)
 
     if not db_exercise:
-        return {"message": "Not found"}
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    workout_set = (
+        db.query(models.WorkoutSet)
+        .filter(models.WorkoutSet.exercise_id == exercise_id)
+        .first()
+    )
+
+    if workout_set:
+        raise HTTPException(
+            status_code=400,
+            detail="Exercise is used by workout sets",
+        )
 
     db.delete(db_exercise)
     db.commit()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -34,10 +34,10 @@ def get_workout(
     workout_id: int,
     db: Session = Depends(get_db),
 ):
-    db_workout = db.query(models.Workout).get(workout_id)
+    db_workout = db.get(models.Workout, workout_id)
 
     if not db_workout:
-        return None
+        raise HTTPException(status_code=404, detail="Workout not found")
 
     workout_sets = (
         db.query(models.WorkoutSet)
@@ -54,21 +54,58 @@ def get_workout(
     }
 
 
+@router.delete("/workouts/{workout_id}")
+def delete_workout(
+    workout_id: int,
+    db: Session = Depends(get_db),
+):
+    db_workout = db.get(models.Workout, workout_id)
+
+    if not db_workout:
+        raise HTTPException(status_code=404, detail="Workout not found")
+
+    db.delete(db_workout)
+    db.commit()
+
+    return {"message": "deleted"}
+
+
+@router.get(
+    "/workouts/{workout_id}/sets",
+    response_model=list[schemas.WorkoutSetResponse],
+)
+def get_workout_sets(
+    workout_id: int,
+    db: Session = Depends(get_db),
+):
+    db_workout = db.get(models.Workout, workout_id)
+
+    if not db_workout:
+        raise HTTPException(status_code=404, detail="Workout not found")
+
+    return (
+        db.query(models.WorkoutSet)
+        .filter(models.WorkoutSet.workout_id == workout_id)
+        .order_by(models.WorkoutSet.set_order.asc())
+        .all()
+    )
+
+
 @router.post("/workouts/{workout_id}/sets", response_model=schemas.WorkoutSetResponse)
 def create_workout_set(
     workout_id: int,
     workout_set: schemas.WorkoutSetCreate,
     db: Session = Depends(get_db),
 ):
-    db_workout = db.query(models.Workout).get(workout_id)
+    db_workout = db.get(models.Workout, workout_id)
 
     if not db_workout:
-        return None
+        raise HTTPException(status_code=404, detail="Workout not found")
 
-    db_exercise = db.query(models.Exercise).get(workout_set.exercise_id)
+    db_exercise = db.get(models.Exercise, workout_set.exercise_id)
 
     if not db_exercise:
-        return None
+        raise HTTPException(status_code=404, detail="Exercise not found")
 
     db_workout_set = models.WorkoutSet(
         workout_id=workout_id,
@@ -85,15 +122,42 @@ def create_workout_set(
     return db_workout_set
 
 
+@router.put("/workout-sets/{set_id}", response_model=schemas.WorkoutSetResponse)
+def update_workout_set(
+    set_id: int,
+    workout_set: schemas.WorkoutSetUpdate,
+    db: Session = Depends(get_db),
+):
+    db_workout_set = db.get(models.WorkoutSet, set_id)
+
+    if not db_workout_set:
+        raise HTTPException(status_code=404, detail="Workout set not found")
+
+    db_exercise = db.get(models.Exercise, workout_set.exercise_id)
+
+    if not db_exercise:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    db_workout_set.exercise_id = workout_set.exercise_id
+    db_workout_set.weight = workout_set.weight
+    db_workout_set.reps = workout_set.reps
+    db_workout_set.set_order = workout_set.set_order
+
+    db.commit()
+    db.refresh(db_workout_set)
+
+    return db_workout_set
+
+
 @router.delete("/workout-sets/{set_id}")
 def delete_workout_set(
     set_id: int,
     db: Session = Depends(get_db),
 ):
-    db_workout_set = db.query(models.WorkoutSet).get(set_id)
+    db_workout_set = db.get(models.WorkoutSet, set_id)
 
     if not db_workout_set:
-        return {"message": "Not found"}
+        raise HTTPException(status_code=404, detail="Workout set not found")
 
     db.delete(db_workout_set)
     db.commit()
