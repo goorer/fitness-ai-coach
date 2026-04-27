@@ -77,6 +77,20 @@ class ExerciseSummaryResponse(BaseModel):
     suggested_next_weight: float | None = None
 
 
+class AIExerciseAnalysisRequest(BaseModel):
+    goal: str | None = None
+    model: str | None = None
+
+
+class AIExerciseAnalysisResponse(BaseModel):
+    exercise_id: int
+    exercise_name: str
+    model: str
+    history_count: int
+    summary: ExerciseSummaryResponse
+    analysis: str
+
+
 class WorkoutDetailResponse(BaseModel):
     id: int
     trained_at: datetime

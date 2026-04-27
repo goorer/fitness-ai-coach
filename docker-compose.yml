@@ -3,6 +3,8 @@ services:
     build:
       context: ./backend
     container_name: fitness-ai-coach-backend
+    depends_on:
+      - ollama
     ports:
       - "8000:8000"
     volumes:
@@ -10,3 +12,16 @@ services:
       - ./backend/data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:latest
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: fitness-ai-coach-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+volumes:
+  ollama-data:
