@@ -1,10 +1,13 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
+from ..services.ai_prompts import (
+    build_exercise_analysis_prompt,
+    build_workout_analysis_prompt,
+)
+from ..services.ai_response import normalize_analysis_text, parse_analysis_sections
 from ..services.llm import generate_text
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -44,10 +47,15 @@ def analyze_exercise(
     ]
 
     summary = _build_summary(exercise_id, history)
-    prompt = _build_exercise_prompt(db_exercise.name, summary, history, request.goal)
+    prompt = build_exercise_analysis_prompt(
+        db_exercise.name,
+        summary,
+        history,
+        request.goal,
+    )
     analysis, selected_model = generate_text(prompt, request.model)
-    analysis = _normalize_analysis_text(analysis)
-    sections = _parse_analysis_sections(analysis)
+    analysis = normalize_analysis_text(analysis)
+    sections = parse_analysis_sections(analysis)
 
     return {
         "exercise_id": exercise_id,
@@ -97,10 +105,15 @@ def analyze_workout(
     ]
     total_volume = sum(item["volume"] for item in sets)
 
-    prompt = _build_workout_prompt(db_workout, sets, total_volume, request.goal)
+    prompt = build_workout_analysis_prompt(
+        db_workout,
+        sets,
+        total_volume,
+        request.goal,
+    )
     analysis, selected_model = generate_text(prompt, request.model)
-    analysis = _normalize_analysis_text(analysis)
-    sections = _parse_analysis_sections(analysis)
+    analysis = normalize_analysis_text(analysis)
+    sections = parse_analysis_sections(analysis)
 
     return {
         "workout_id": workout_id,
@@ -137,115 +150,3 @@ def _build_summary(exercise_id: int, history: list[dict]) -> dict:
         "total_volume": total_volume,
         "suggested_next_weight": max_weight + 2.5,
     }
-
-
-def _normalize_analysis_text(analysis: str) -> str:
-    return analysis.replace("リップ", "レップ")
-
-
-def _parse_analysis_sections(analysis: str) -> dict:
-    json_text = _extract_json_text(analysis)
-
-    try:
-        data = json.loads(json_text)
-    except json.JSONDecodeError:
-        return {
-            "summary": analysis,
-            "recommendation": "",
-            "cautions": [],
-        }
-
-    return {
-        "summary": str(data.get("summary", "")),
-        "recommendation": str(data.get("recommendation", "")),
-        "cautions": [
-            str(caution)
-            for caution in data.get("cautions", [])
-            if str(caution).strip()
-        ],
-    }
-
-
-def _extract_json_text(text: str) -> str:
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1 or end <= start:
-        return text
-
-    return text[start : end + 1]
-
-
-def _build_exercise_prompt(
-    exercise_name: str,
-    summary: dict,
-    history: list[dict],
-    goal: str | None,
-) -> str:
-    recent_history = history[-20:]
-
-    return f"""
-あなたは筋力トレーニングの記録を分析するコーチです。
-以下の種目記録をもとに、日本語で短く実用的に分析してください。
-
-必ず次のJSONだけを返してください:
-{{
-  "summary": "ここに具体的な現状評価を書く",
-  "recommendation": "ここに具体的な次回提案を書く",
-  "cautions": ["ここに具体的な注意点を書く"]
-}}
-上の文言をそのまま使わず、必ず記録内容に合わせた具体的な文章にしてください。
-
-種目: {exercise_name}
-目標: {goal or "指定なし"}
-サマリー:
-{json.dumps(summary, ensure_ascii=False)}
-
-直近履歴:
-{json.dumps(recent_history, ensure_ascii=False)}
-
-注意:
-- 医療的な診断はしない
-- 無理な増量を勧めない
-- 次回重量の増加は原則2.5kg以内にする
-- 「リップ」ではなく「レップ」と書く
-- volumeは「総ボリューム」と表現する
-- データが少ない場合は、その前提を明記する
-""".strip()
-
-
-def _build_workout_prompt(
-    workout: models.Workout,
-    sets: list[dict],
-    total_volume: float,
-    goal: str | None,
-) -> str:
-    return f"""
-あなたは筋力トレーニングの記録を分析するコーチです。
-以下の1回分のワークアウト記録をもとに、日本語で短く実用的に分析してください。
-
-必ず次のJSONだけを返してください:
-{{
-  "summary": "ここに具体的なワークアウト全体の評価を書く",
-  "recommendation": "ここに具体的な次回メニューや強度の提案を書く",
-  "cautions": ["ここに具体的な注意点を書く"]
-}}
-上の文言をそのまま使わず、必ず記録内容に合わせた具体的な文章にしてください。
-
-ワークアウト日時: {workout.trained_at.isoformat()}
-メモ: {workout.note or "なし"}
-目標: {goal or "指定なし"}
-セット数: {len(sets)}
-総ボリューム: {total_volume}
-
-セット内容:
-{json.dumps(sets, ensure_ascii=False)}
-
-注意:
-- 医療的な診断はしない
-- 無理な増量を勧めない
-- 次回重量の増加は原則2.5kg以内にする
-- 「リップ」ではなく「レップ」と書く
-- volumeは「総ボリューム」と表現する
-- データが少ない場合は、その前提を明記する
-""".strip()
