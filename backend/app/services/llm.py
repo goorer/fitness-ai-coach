@@ -1,7 +1,7 @@
 import os
 
-import requests
 from fastapi import HTTPException
+from langchain_ollama import ChatOllama
 
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
@@ -15,26 +15,21 @@ def generate_text(prompt: str, model: str | None = None) -> tuple[str, str]:
         selected_model = OLLAMA_MODEL
 
     try:
-        response = requests.post(
-            f"{OLLAMA_BASE_URL}/api/generate",
-            json={
-                "model": selected_model,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=180,
+        llm = ChatOllama(
+            model=selected_model,
+            base_url=OLLAMA_BASE_URL,
+            temperature=0,
         )
-    except requests.RequestException as error:
+        response = llm.invoke(prompt)
+    except Exception as error:
         raise HTTPException(
             status_code=503,
             detail=f"LLM service unavailable: {error}",
         ) from error
 
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=503,
-            detail=f"LLM service error: {response.text}",
-        )
+    content = response.content
 
-    data = response.json()
-    return data.get("response", ""), selected_model
+    if isinstance(content, str):
+        return content, selected_model
+
+    return str(content), selected_model
