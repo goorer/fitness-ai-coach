@@ -82,12 +82,31 @@ class AIExerciseAnalysisRequest(BaseModel):
     model: str | None = None
 
 
+class AIWorkoutAnalysisRequest(BaseModel):
+    goal: str | None = None
+    model: str | None = None
+
+
 class AIExerciseAnalysisResponse(BaseModel):
     exercise_id: int
     exercise_name: str
     model: str
     history_count: int
-    summary: ExerciseSummaryResponse
+    metrics: ExerciseSummaryResponse
+    summary: str
+    recommendation: str
+    cautions: list[str]
+    analysis: str
+
+
+class AIWorkoutAnalysisResponse(BaseModel):
+    workout_id: int
+    model: str
+    set_count: int
+    total_volume: float
+    summary: str
+    recommendation: str
+    cautions: list[str]
     analysis: str
 
 
